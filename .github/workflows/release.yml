@@ -1,0 +1,205 @@
+name: Build and publish filmkit-glinet .ipk
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: gh-pages-deploy
+  cancel-in-progress: false
+
+env:
+  ARCH: aarch64-cortex-a53
+  GOARCH: arm64
+  GOOS: linux
+  LIBUSB_VERSION: "1.0.27"
+  LIBUSB_DIR: /opt/libusb-arm64
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      # ── Cross-compiler (gcc-aarch64-linux-gnu from apt) ──────────────────
+      - name: Install cross-compiler
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      # ── Static libusb for arm64 ───────────────────────────────────────────
+      - name: Cache static libusb
+        id: cache-libusb
+        uses: actions/cache@v4
+        with:
+          path: /opt/libusb-arm64
+          key: libusb-${{ env.LIBUSB_VERSION }}-aarch64-linux-gnu
+
+      - name: Build static libusb (cache miss)
+        if: steps.cache-libusb.outputs.cache-hit != 'true'
+        run: |
+          make -C filmkit-daemon build-libusb \
+            CC=aarch64-linux-gnu-gcc \
+            HOST_TRIPLE=aarch64-linux-gnu \
+            LIBUSB_DIR=/opt/libusb-arm64
+
+      # ── Frontend ──────────────────────────────────────────────────────────
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: filmkit/package-lock.json
+
+      - name: Build frontend
+        run: |
+          cd filmkit
+          npm ci
+          npm run build
+
+      # ── Go daemon ─────────────────────────────────────────────────────────
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache-dependency-path: filmkit-daemon/go.sum
+
+      - name: Build filmkit-daemon
+        env:
+          PKG_CONFIG_PATH: /opt/libusb-arm64/lib/pkgconfig
+        run: |
+          make -C filmkit-daemon build \
+            CC=aarch64-linux-gnu-gcc \
+            LIBUSB_DIR=/opt/libusb-arm64
+
+      # ── Assemble .ipk ─────────────────────────────────────────────────────
+      - name: Assemble .ipk
+        id: ipk
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          PKG_NAME="filmkit-glinet_${VERSION}_${ARCH}"
+
+          STAGING="$(mktemp -d)/staging"
+          mkdir -p "${STAGING}/usr/bin" \
+                   "${STAGING}/etc/init.d" \
+                   "${STAGING}/www/filmkit"
+
+          cp filmkit-daemon/dist/filmkit-daemon "${STAGING}/usr/bin/filmkit-daemon"
+          chmod 755 "${STAGING}/usr/bin/filmkit-daemon"
+          cp filmkit-daemon/openwrt/files/etc/init.d/filmkit "${STAGING}/etc/init.d/filmkit"
+          chmod 755 "${STAGING}/etc/init.d/filmkit"
+          cp -r filmkit/dist/. "${STAGING}/www/filmkit/"
+
+          # Reproducible archive timestamps
+          export SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)
+
+          # data.tar.gz — sorted, root ownership
+          DATA_TAR="$(mktemp -d)/data.tar.gz"
+          (cd "${STAGING}" && \
+            find . -mindepth 1 | sort | \
+            tar czf "${DATA_TAR}" \
+              --no-recursion \
+              --files-from=- \
+              --owner=0 --group=0 --numeric-owner)
+
+          # control file
+          INSTALLED_KB=$(du -sk "${STAGING}" | cut -f1)
+          CTRL_DIR="$(mktemp -d)"
+          sed \
+            -e "s/FILMKIT_VERSION/${VERSION}/" \
+            -e "s/FILMKIT_INSTALLED_SIZE/${INSTALLED_KB}/" \
+            package/control.tmpl > "${CTRL_DIR}/control"
+          CTRL_TAR="$(mktemp -d)/control.tar.gz"
+          (cd "${CTRL_DIR}" && \
+            tar czf "${CTRL_TAR}" \
+              --owner=0 --group=0 --numeric-owner \
+              ./control)
+
+          # debian-binary
+          DEB_BIN="$(mktemp -d)/debian-binary"
+          printf '2.0\n' > "${DEB_BIN}"
+
+          # Assemble — member order matters: debian-binary must be first
+          IPK_PATH="${GITHUB_WORKSPACE}/${PKG_NAME}.ipk"
+          ar r "${IPK_PATH}" "${DEB_BIN}" "${CTRL_TAR}" "${DATA_TAR}"
+
+          echo "ipk_path=${IPK_PATH}"           >> "$GITHUB_OUTPUT"
+          echo "ipk_name=${PKG_NAME}.ipk"       >> "$GITHUB_OUTPUT"
+          echo "pkg_size=$(stat -c%s "${IPK_PATH}")"                  >> "$GITHUB_OUTPUT"
+          echo "sha256=$(sha256sum "${IPK_PATH}" | cut -d' ' -f1)"    >> "$GITHUB_OUTPUT"
+
+      # ── Publish to gh-pages opkg feed ─────────────────────────────────────
+      - name: Deploy to gh-pages
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          IPK_NAME: ${{ steps.ipk.outputs.ipk_name }}
+          IPK_PATH: ${{ steps.ipk.outputs.ipk_path }}
+        run: |
+          set -euo pipefail
+          FEED_DIR="packages/${ARCH}"
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git fetch origin gh-pages 2>/dev/null || true
+
+          DEPLOY_DIR="$(mktemp -d)"
+          if git ls-remote --exit-code origin gh-pages > /dev/null 2>&1; then
+            git worktree add "${DEPLOY_DIR}" origin/gh-pages
+          else
+            git worktree add --orphan -b gh-pages "${DEPLOY_DIR}"
+          fi
+
+          cd "${DEPLOY_DIR}"
+          touch .nojekyll   # disable Jekyll so all files are served as-is
+          mkdir -p "${FEED_DIR}"
+          cp "${IPK_PATH}" "${FEED_DIR}/${IPK_NAME}"
+
+          # Regenerate Packages index from every .ipk in the feed dir
+          PACKAGES_FILE="${FEED_DIR}/Packages"
+          > "${PACKAGES_FILE}"
+          for ipk in "${FEED_DIR}"/*.ipk; do
+            [ -f "$ipk" ] || continue
+            fname=$(basename "$ipk")
+            fsize=$(stat -c%s "$ipk")
+            fsha=$(sha256sum "$ipk" | cut -d' ' -f1)
+            CTRL_TMP=$(mktemp -d)
+            ar x "$ipk" --output="${CTRL_TMP}"
+            tar xzf "${CTRL_TMP}/control.tar.gz" -C "${CTRL_TMP}" ./control
+            cat "${CTRL_TMP}/control" >> "${PACKAGES_FILE}"
+            printf "Filename: %s\nSize: %s\nSHA256sum: %s\n\n" \
+              "$fname" "$fsize" "$fsha" >> "${PACKAGES_FILE}"
+            rm -rf "${CTRL_TMP}"
+          done
+          gzip -9 -f -k "${PACKAGES_FILE}"
+
+          git add .nojekyll "${FEED_DIR}/"
+          git commit -m "release: filmkit-glinet ${VERSION} for ${ARCH}"
+          git push origin HEAD:gh-pages
+
+          cd "${GITHUB_WORKSPACE}"
+          git worktree remove "${DEPLOY_DIR}" --force
+
+      # ── Attach .ipk to GitHub Release ─────────────────────────────────────
+      - name: Upload .ipk to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.ipk.outputs.ipk_path }}

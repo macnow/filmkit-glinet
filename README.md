@@ -25,7 +25,42 @@ Fujifilm camera (USB-C)
 | GL.inet GL-BE9300 | X100VI |
 | GL.inet GL-E5800 | X100VI |
 
-## Prerequisites
+## Install on GL.inet router (opkg package)
+
+The easiest way to install FilmKit is via the pre-built `.ipk` package from the release feed.
+
+### Method A — GL.inet Admin Panel (GUI)
+
+1. Open the router admin panel (default: `http://192.168.8.1`)
+2. Go to **Applications** → **Plug-ins** → **Manage Software Sources** → **Add**
+3. Fill in:
+   - **Name:** `filmkit`
+   - **URL:** `https://macnow.github.io/filmkit-glinet/packages/aarch64-cortex-a53`
+4. Click **Save**, then **Update** to refresh the package list
+5. Go back to **Plug-ins**, search for `filmkit-glinet`, and click **Install**
+
+### Method B — SSH
+
+```sh
+echo "src/gz filmkit https://macnow.github.io/filmkit-glinet/packages/aarch64-cortex-a53" \
+  >> /etc/opkg/customfeeds.conf
+opkg update
+opkg install filmkit-glinet
+```
+
+### Upgrade
+
+```sh
+opkg update && opkg upgrade filmkit-glinet
+```
+
+After installation, FilmKit is available at `http://10.0.1.1:8765/` (or your router's IP).
+
+---
+
+## Build from source
+
+### Prerequisites
 
 - **Node.js** (for building the frontend)
 - **Go 1.21+** (for building the daemon)
