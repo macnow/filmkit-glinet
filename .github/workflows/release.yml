@@ -184,9 +184,13 @@ jobs:
             CTRL_TMP=$(mktemp -d)
             ar x "$ipk" --output="${CTRL_TMP}"
             tar xzf "${CTRL_TMP}/control.tar.gz" -C "${CTRL_TMP}" ./control
-            cat "${CTRL_TMP}/control" >> "${PACKAGES_FILE}"
-            printf "Filename: %s\nSize: %s\nSHA256sum: %s\n\n" \
+            # Append all fields except Description first, then Description last
+            # (opkg treats Description as potentially multi-line — fields after it are ignored)
+            grep -v "^Description:" "${CTRL_TMP}/control" | grep -v "^$" >> "${PACKAGES_FILE}"
+            printf "Filename: %s\nSize: %s\nSHA256sum: %s\n" \
               "$fname" "$fsize" "$fsha" >> "${PACKAGES_FILE}"
+            grep "^Description:" "${CTRL_TMP}/control" >> "${PACKAGES_FILE}"
+            printf "\n" >> "${PACKAGES_FILE}"
             rm -rf "${CTRL_TMP}"
           done
           gzip -9 -f -k "${PACKAGES_FILE}"
