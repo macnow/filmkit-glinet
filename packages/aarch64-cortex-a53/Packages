@@ -1,6 +1,6 @@
 Package: filmkit-glinet
 Version: 1.0.1
-Architecture: aarch64_cortex-a53
+Architecture: aarch64_cortex-a53_neon-vfpv4
 Maintainer: Maciej Nowakowski
 Installed-Size: 8188
 Filename: filmkit-glinet_1.0.1_aarch64-cortex-a53.ipk
