@@ -1,0 +1,6 @@
+[submodule "filmkit"]
+	path = filmkit
+	url = https://github.com/macnow/filmkit.git
+[submodule "filmkit-daemon"]
+	path = filmkit-daemon
+	url = https://github.com/macnow/filmkit-daemon.git
