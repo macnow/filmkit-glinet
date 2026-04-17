@@ -6,4 +6,15 @@ Installed-Size: 8188
 Filename: filmkit-glinet_1.0.0_aarch64-cortex-a53.ipk
 Size: 4861506
 SHA256sum: 940b146b7d5583480ea20cc7d2b5ce94607da109de5555d93ca61dee01b7bfca
+Description: FilmKit for GL.inet routers — Fujifilm camera preset editor via USB/HTTP bridge
+
+Package: filmkit-glinet
+Version: 1.0.1
+Architecture: aarch64_cortex-a53
+Maintainer: Maciej Nowakowski
+Installed-Size: 8188
+Filename: filmkit-glinet_1.0.1_aarch64-cortex-a53.ipk
+Size: 4861500
+SHA256sum: d740474d45226d5871ec53a4936d6b2341ccd5b8ecb5694cbdce2c8af0667010
 Description: FilmKit for GL.inet routers - Fujifilm camera preset editor via USB/HTTP bridge
+
