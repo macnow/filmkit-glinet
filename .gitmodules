@@ -1,6 +1,8 @@
 [submodule "filmkit"]
 	path = filmkit
 	url = https://github.com/macnow/filmkit.git
+	branch = master
 [submodule "filmkit-daemon"]
 	path = filmkit-daemon
 	url = https://github.com/macnow/filmkit-daemon.git
+	branch = master
