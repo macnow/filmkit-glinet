@@ -4,7 +4,7 @@ Architecture: aarch64_cortex-a53_neon-vfpv4
 Maintainer: Maciej Nowakowski
 Installed-Size: 8188
 Filename: filmkit-glinet_1.0.1_aarch64-cortex-a53.ipk
-Size: 4854807
-SHA256sum: 34bc1cf47bf08e277b1fcf96a577a224104e027c1c80b3a16d27aeca26bf0668
+Size: 4854863
+SHA256sum: 431f6276765cd8857310acb4be623c66b5955697b92698c36f60c52d33095fa3
 Description: FilmKit for GL.inet routers - Fujifilm camera preset editor via USB/HTTP bridge
 
