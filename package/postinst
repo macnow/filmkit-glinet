@@ -1,0 +1,3 @@
+#!/bin/sh
+/etc/init.d/filmkit enable
+/etc/init.d/filmkit start

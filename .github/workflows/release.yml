@@ -128,15 +128,16 @@ jobs:
             -e "s/FILMKIT_INSTALLED_SIZE/${INSTALLED_KB}/" \
             package/control.tmpl > "${CTRL_DIR}/control"
 
-          # prerm/postrm maintainer scripts (sourced from package/)
-          cp package/prerm  "${CTRL_DIR}/prerm"  && chmod 755 "${CTRL_DIR}/prerm"
-          cp package/postrm "${CTRL_DIR}/postrm" && chmod 755 "${CTRL_DIR}/postrm"
+          # maintainer scripts (sourced from package/)
+          cp package/postinst "${CTRL_DIR}/postinst" && chmod 755 "${CTRL_DIR}/postinst"
+          cp package/prerm    "${CTRL_DIR}/prerm"    && chmod 755 "${CTRL_DIR}/prerm"
+          cp package/postrm   "${CTRL_DIR}/postrm"   && chmod 755 "${CTRL_DIR}/postrm"
 
           CTRL_TAR="$(mktemp -d)/control.tar.gz"
           (cd "${CTRL_DIR}" && \
             tar czf "${CTRL_TAR}" \
               --owner=0 --group=0 --numeric-owner \
-              ./control ./prerm ./postrm)
+              ./control ./postinst ./prerm ./postrm)
 
           # debian-binary
           DEB_BIN="$(mktemp -d)/debian-binary"
