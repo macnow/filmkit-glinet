@@ -137,9 +137,17 @@ jobs:
           DEB_BIN="$(mktemp -d)/debian-binary"
           printf '2.0\n' > "${DEB_BIN}"
 
-          # Assemble — member order matters: debian-binary must be first
+          # Assemble — GL.inet opkg expects .ipk as a plain tar.gz (ipkg format),
+          # NOT an ar archive (standard opkg format).
           IPK_PATH="${GITHUB_WORKSPACE}/${PKG_NAME}.ipk"
-          ar r "${IPK_PATH}" "${DEB_BIN}" "${CTRL_TAR}" "${DATA_TAR}"
+          PKG_BUILD_DIR="$(mktemp -d)"
+          cp "${DEB_BIN}"  "${PKG_BUILD_DIR}/debian-binary"
+          cp "${CTRL_TAR}" "${PKG_BUILD_DIR}/control.tar.gz"
+          cp "${DATA_TAR}" "${PKG_BUILD_DIR}/data.tar.gz"
+          (cd "${PKG_BUILD_DIR}" && \
+            tar czf "${IPK_PATH}" \
+              --owner=0 --group=0 --numeric-owner \
+              ./debian-binary ./control.tar.gz ./data.tar.gz)
 
           echo "ipk_path=${IPK_PATH}"           >> "$GITHUB_OUTPUT"
           echo "ipk_name=${PKG_NAME}.ipk"       >> "$GITHUB_OUTPUT"
@@ -182,7 +190,7 @@ jobs:
             fsize=$(stat -c%s "$ipk")
             fsha=$(sha256sum "$ipk" | cut -d' ' -f1)
             CTRL_TMP=$(mktemp -d)
-            ar x "$ipk" --output="${CTRL_TMP}"
+            tar xzf "$ipk" -C "${CTRL_TMP}" ./control.tar.gz
             tar xzf "${CTRL_TMP}/control.tar.gz" -C "${CTRL_TMP}" ./control
             # Append all fields except Description first, then Description last
             # (opkg treats Description as potentially multi-line — fields after it are ignored)
