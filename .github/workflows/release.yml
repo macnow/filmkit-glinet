@@ -179,6 +179,8 @@ jobs:
           cd "${DEPLOY_DIR}"
           touch .nojekyll   # disable Jekyll so all files are served as-is
           mkdir -p "${FEED_DIR}"
+          # Remove previous versions of this package (keep feed clean, one version per package)
+          rm -f "${FEED_DIR}/filmkit-glinet_"*.ipk
           cp "${IPK_PATH}" "${FEED_DIR}/${IPK_NAME}"
 
           # Regenerate Packages index from every .ipk in the feed dir
