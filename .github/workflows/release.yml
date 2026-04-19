@@ -120,18 +120,36 @@ jobs:
               --files-from=- \
               --owner=0 --group=0 --numeric-owner)
 
-          # control file
+          # control file + maintainer scripts
           INSTALLED_KB=$(du -sk "${STAGING}" | cut -f1)
           CTRL_DIR="$(mktemp -d)"
           sed \
             -e "s/FILMKIT_VERSION/${VERSION}/" \
             -e "s/FILMKIT_INSTALLED_SIZE/${INSTALLED_KB}/" \
             package/control.tmpl > "${CTRL_DIR}/control"
+
+          # prerm — stop and disable service before files are removed
+          cat > "${CTRL_DIR}/prerm" <<'PRERM'
+#!/bin/sh
+if [ -x /etc/init.d/filmkit ]; then
+    /etc/init.d/filmkit disable 2>/dev/null || true
+    /etc/init.d/filmkit stop   2>/dev/null || true
+fi
+PRERM
+          chmod 755 "${CTRL_DIR}/prerm"
+
+          # postrm — remove web-files directory left behind by opkg
+          cat > "${CTRL_DIR}/postrm" <<'POSTRM'
+#!/bin/sh
+rm -rf /www/filmkit
+POSTRM
+          chmod 755 "${CTRL_DIR}/postrm"
+
           CTRL_TAR="$(mktemp -d)/control.tar.gz"
           (cd "${CTRL_DIR}" && \
             tar czf "${CTRL_TAR}" \
               --owner=0 --group=0 --numeric-owner \
-              ./control)
+              ./control ./prerm ./postrm)
 
           # debian-binary
           DEB_BIN="$(mktemp -d)/debian-binary"
